@@ -1,0 +1,5 @@
+factors:
+	sum of heights			aggrigate height
+	complete lines			lines that are complete
+	holes					number of holes
+	bumpiness				(sum of [absolute value of (collumn_height - next_collumn_height)])
