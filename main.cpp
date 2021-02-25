@@ -4,13 +4,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+
 #define SLOW true
 #define macsec 30000   //macsec is microseconds itll sleep per action if on SLOWmode
 
 using namespace std;
-const int HEIGHT=22;
-const int LENGTH=10;
-const int BUFFER=1;
+int HEIGHT=22;
+int LENGTH=10;
+const int BUFFER=2;
 const double SCALE=0.85;
 typedef char i8;
 i8* board;
@@ -22,6 +23,14 @@ int (*peices[7])[2];	// array of 7, 1 per peice,
 						//	thease point to a 2d array each of the form [4][2]
 						// thease 2d arrays are of the form arr[x][y] where you are getting the position of the xth peice where y=0 is the x position and y=1 is the y position
 int held=1;
+
+#define IMG false
+#if IMG
+#include <fstream>
+int fHeight=-1;
+int* fboard;
+#endif
+
 void rotateTet(int (*peice)[2]){
 	int t=0;
 	for(int i=0;i<4;i++){
@@ -68,13 +77,19 @@ void drawSquare(int x1, int y1,float* rgb)
 }
 
 void draw(){
+#if IMG
+	for (int i =0;i<=fHeight;i++){
+		for (int j =0;j<LENGTH;j++){
+			drawSquare(j,i,cols[fboard[(i*LENGTH) +j]]);
+		}
+	}
+	for (int i =fHeight+1;i<HEIGHT-2;i++){
+#endif
 	for (int i =0;i<HEIGHT;i++){
 		for (int j =0;j<LENGTH;j++){
 			drawSquare(j,i,cols[board[(i*LENGTH) +j]]);
 		}
 	}
-	
-	
 }
 
 int abs(int x){
@@ -124,7 +139,7 @@ void disInit(){
 }
 
 void run() {
-	int y{20},x{LENGTH/2},pec{rand()%orange};
+	int y{HEIGHT-2},x{LENGTH/2},pec{rand()%orange};
 #if SLOW
 	int temps[4]={0,0,0,0};
 	for(int i=0;i<4;i++){
@@ -192,15 +207,15 @@ void run() {
 	}
 #if SLOW
 	for(int k=0;k<4;k++){
-		temps[k]=board[peices[c][k][0]+bx + (peices[c][k][1]+20)*LENGTH];
-		board[peices[c][k][0]+bx + (peices[c][k][1]+20)*LENGTH]=c+1;
-		drawSquare(bx+peices[c][k][0],20+peices[c][k][1],cols[c+1]);
+		temps[k]=board[peices[c][k][0]+bx + (peices[c][k][1]+HEIGHT-2)*LENGTH];
+		board[peices[c][k][0]+bx + (peices[c][k][1]+HEIGHT-2)*LENGTH]=c+1;
+		drawSquare(bx+peices[c][k][0],HEIGHT-2+peices[c][k][1],cols[c+1]);
 	}
 	glFlush();
 	usleep(macsec);
 	for(int k=0;k<4;k++){
-		board[(20+peices[c][k][1])*LENGTH+(bx+peices[c][k][0])] = temps[k];
-		drawSquare(bx+peices[c][k][0],20+peices[c][k][1],cols[temps[k]]);
+		board[(HEIGHT-2+peices[c][k][1])*LENGTH+(bx+peices[c][k][0])] = temps[k];
+		drawSquare(bx+peices[c][k][0],HEIGHT-2+peices[c][k][1],cols[temps[k]]);
 		board[peices[c][k][0]+bx + (peices[c][k][1]+by)*LENGTH]=c+1;
     } 
 	glFlush();
@@ -212,7 +227,11 @@ void run() {
 #endif
 	int killR=0;
 	i8 t;
+#if IMG
+	for(int i=fHeight+1;i<HEIGHT;i++){
+#else
 	for(int i=0;i<HEIGHT;i++){
+#endif
 		bool fullR=true;
 		for(int j=0;j<LENGTH;j++){
 			fullR&=board[i*LENGTH +j]!=0;
@@ -220,9 +239,19 @@ void run() {
 			board[i*LENGTH +j]=0;
 			board[(i-killR)*LENGTH +j]=t;
 		}
-		if(fullR){killR++;}
+		if(fullR){
+#if IMG
+			fHeight+=1;
+			for(int j=0;j<LENGTH;j++){
+				fboard[i*LENGTH+j]=(fboard[i*LENGTH+j]!=0) * board[i*LENGTH+j]+(board[i*LENGTH+j]==0);
+			}
+#else
+			killR++;
+#endif
+		}
 
 	}
+	
 	draw();
 #if SLOW
 	usleep(macsec);
@@ -231,6 +260,30 @@ void run() {
 }
 
 int main(int argc, char** argv) {
+#if IMG	
+	ifstream f;
+	f.open("base.txt",ios::in);
+	f.seekg (0, f.end);
+    int l = f.tellg();
+    f.seekg (0, f.beg);
+	char inp;
+	int lines=0;
+	fboard = new int[l]{0};
+	int i=0;
+	while(not f.eof()){
+		f.read(&inp,1);	
+		if(inp=='\n'){lines++;}
+		if(inp=='o'){fboard[i]=1;i++;}
+		if(inp==' '){i++;}
+	}
+	f.close();
+	HEIGHT=lines+3;
+	LENGTH=l / lines
+             + (((l < 0) ^ (lines > 0)) && (l%lines))-1;
+	cout << "the psudeo-constants LENGTH and HEIGHT have changed"<<endl<<"LENGTH: "<<LENGTH<<", HEIGHT:" <<HEIGHT<<endl;
+#endif
+
+
 	cols = new float*[8];
 	cols[blank] = new float[3]{0,0,0};
 	cols[cyan] = new float[3]{0,1,1};
@@ -285,6 +338,7 @@ int main(int argc, char** argv) {
 		{-1,1},
 		{0,1}
 	};
+
 	srand (time(NULL));
 	glutInit(&argc, argv);		// Initialize GLUT
     glutInitWindowSize((LENGTH*20) + 20*BUFFER, (HEIGHT*20)+20*BUFFER);   // Set the window's initial width & height
