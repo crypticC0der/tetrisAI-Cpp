@@ -3,10 +3,15 @@
 #include <time.h> 
 #include <stdlib.h>
 #include <unistd.h>
+
+#define SLOW true
+#define macsec 30000   //macsec is microseconds itll sleep per action if on SLOWmode
+
 using namespace std;
 const int HEIGHT=22;
 const int LENGTH=10;
 const int BUFFER=1;
+const double SCALE=0.85;
 typedef char i8;
 i8* board;
 //board array is of the form board[h*LENGTH+l] 
@@ -51,6 +56,9 @@ void drawSquare(int x1, int y1,float* rgb)
 	xf = xf/(LENGTH/2.0 + BUFFER/2.0) +xd*(BUFFER)/2.0;
 	yf = yf/(HEIGHT/2.0 + BUFFER/2.0) +yd*(BUFFER)/2.0;
 	xf += xd;
+	yf += yd;
+	xd=xd*SCALE;
+	yd=yd*SCALE;
     glVertex2d(xf + xd, yf + yd);
     glVertex2d(xf + xd, yf - yd);
     glVertex2d(xf - xd, yf - yd);
@@ -117,17 +125,20 @@ void disInit(){
 
 void run() {
 	int y{20},x{LENGTH/2},pec{rand()%orange};
-//	int temps[4]={0,0,0,0};
-//	for(int i=0;i<4;i++){
-//		temps[i] = board[(y+peices[pec][i][1])*LENGTH +(x+peices[pec][i][0])]; 
-//		*(board+((y+peices[pec][i][1])*LENGTH)+x+peices[pec][i][0]) = pec+1;
-//		drawSquare(x+peices[pec][i][0],y+peices[pec][i][1],cols[pec+1]);
-//	}
-//	glFlush();
-//	for(int i=0;i<4;i++){
-//		board[(y+peices[pec][i][1])*LENGTH+(x+peices[pec][i][0])] = temps[i];
-//		drawSquare(x+peices[pec][i][0],y+peices[pec][i][1],cols[temps[i]]);
-//	}
+#if SLOW
+	int temps[4]={0,0,0,0};
+	for(int i=0;i<4;i++){
+		temps[i] = board[(y+peices[pec][i][1])*LENGTH +(x+peices[pec][i][0])]; 
+		*(board+((y+peices[pec][i][1])*LENGTH)+x+peices[pec][i][0]) = pec+1;
+		drawSquare(x+peices[pec][i][0],y+peices[pec][i][1],cols[pec+1]);
+	}
+	glFlush();
+	usleep(macsec);
+	for(int i=0;i<4;i++){
+		board[(y+peices[pec][i][1])*LENGTH+(x+peices[pec][i][0])] = temps[i];
+		drawSquare(x+peices[pec][i][0],y+peices[pec][i][1],cols[temps[i]]);
+	}
+#endif
 	int bx{5},by{10},br{2},bcul{1}; //best x best y, best rotation (rotation stored as r where toation is r*pi/2)
 	double bc=9000000; //best cost
 	int culs[2] = {held,pec};
@@ -172,22 +183,33 @@ void run() {
 			}
 		}
 	}
+	if(bcul==held){
+		held=pec;
+	}
 	c=bcul;
 	for(int i=0;i<br;i++){
 		rotateTet(peices[c]);
 	}
-//	for(int k=0;k<4;k++){
-//		temps[k]=board[peices[c][k][0]+bx + (peices[c][k][1]+20)*LENGTH];
-//		board[peices[c][k][0]+bx + (peices[c][k][1]+20)*LENGTH]=c+1;
-//		drawSquare(bx+peices[c][k][0],20+peices[c][k][1],cols[c+1]);
-//	}
-//	glFlush();
+#if SLOW
 	for(int k=0;k<4;k++){
-//		board[(20+peices[c][k][1])*LENGTH+(bx+peices[c][k][0])] = temps[k];
-//		drawSquare(bx+peices[c][k][0],20+peices[c][k][1],cols[temps[k]]);
+		temps[k]=board[peices[c][k][0]+bx + (peices[c][k][1]+20)*LENGTH];
+		board[peices[c][k][0]+bx + (peices[c][k][1]+20)*LENGTH]=c+1;
+		drawSquare(bx+peices[c][k][0],20+peices[c][k][1],cols[c+1]);
+	}
+	glFlush();
+	usleep(macsec);
+	for(int k=0;k<4;k++){
+		board[(20+peices[c][k][1])*LENGTH+(bx+peices[c][k][0])] = temps[k];
+		drawSquare(bx+peices[c][k][0],20+peices[c][k][1],cols[temps[k]]);
 		board[peices[c][k][0]+bx + (peices[c][k][1]+by)*LENGTH]=c+1;
     } 
-//	glFlush();
+	glFlush();
+	usleep(macsec);
+#else
+	for(int k=0;k<4;k++){
+		board[peices[c][k][0]+bx + (peices[c][k][1]+by)*LENGTH]=c+1;
+    }
+#endif
 	int killR=0;
 	i8 t;
 	for(int i=0;i<HEIGHT;i++){
@@ -202,12 +224,13 @@ void run() {
 
 	}
 	draw();
+#if SLOW
+	usleep(macsec);
+#endif
 	glFlush();
-
 }
 
 int main(int argc, char** argv) {
-	cout <<"h"<<endl;
 	cols = new float*[8];
 	cols[blank] = new float[3]{0,0,0};
 	cols[cyan] = new float[3]{0,1,1};
