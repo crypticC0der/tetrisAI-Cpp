@@ -2,11 +2,11 @@
 #include <GL/glut.h>
 #include <time.h> 
 #include <stdlib.h>
+#include <unistd.h>
 using namespace std;
-
 const int HEIGHT=22;
 const int LENGTH=10;
-const int BUFFER=2;
+const int BUFFER=1;
 typedef char i8;
 i8* board;
 //board array is of the form board[h*LENGTH+l] 
@@ -16,7 +16,7 @@ float** cols;
 int (*peices[7])[2];	// array of 7, 1 per peice,
 						//	thease point to a 2d array each of the form [4][2]
 						// thease 2d arrays are of the form arr[x][y] where you are getting the position of the xth peice where y=0 is the x position and y=1 is the y position
-
+int held=1;
 void rotateTet(int (*peice)[2]){
 	int t=0;
 	for(int i=0;i<4;i++){
@@ -48,8 +48,9 @@ void drawSquare(int x1, int y1,float* rgb)
 	float yd = 1.0 / (HEIGHT+BUFFER);
 	float xf=x1- (LENGTH+BUFFER/2.0)/2.0;
 	float yf=y1- (HEIGHT+BUFFER/2.0)/2.0;
-	xf = xf/(LENGTH/2.0 + BUFFER/2.0) +xd*BUFFER/2.0;
-	yf = yf/(HEIGHT/2.0 + BUFFER/2.0) +yd*BUFFER/2.0;
+	xf = xf/(LENGTH/2.0 + BUFFER/2.0) +xd*(BUFFER)/2.0;
+	yf = yf/(HEIGHT/2.0 + BUFFER/2.0) +yd*(BUFFER)/2.0;
+	xf += xd;
     glVertex2d(xf + xd, yf + yd);
     glVertex2d(xf + xd, yf - yd);
     glVertex2d(xf - xd, yf - yd);
@@ -68,39 +69,145 @@ void draw(){
 	
 }
 
+int abs(int x){
+	if(x<0){return (-x);}
+	else{return x;}
+}
+
+double vs[4] = {0.510066,-0.760666,0.35663,0.184483};
+
+double cost(){
+	double cst=0;
+	int i{HEIGHT},j{0};
+	int ph;
+	bool in;
+	for(j=0;j<LENGTH;j++){
+		in = false;
+		int h=0;
+		i=HEIGHT;
+		while(i>0){
+			i--;
+			if(!in && board[i*LENGTH +j]!=0){
+				h=i+1;
+			}
+			if(in&&board[i*LENGTH +j]==0){cst+=vs[2];}
+			in |= board[i*LENGTH +j]!=0;
+		}
+		cst+=vs[0]+h;
+		if(j!=0){cst+=vs[3]*abs(ph-h);}
+		ph=h;
+	}
+	for(i=0;i<HEIGHT;i++){
+		bool fullR=true;
+		for(j=0;j<LENGTH;j++){
+			fullR &= board[(i*LENGTH) +j]!=0;
+		}
+		if (fullR){cst+=vs[1];}
+	}
+	
+	return cst;
+}
+
 void disInit(){
 	glClearColor(0.0f, 0.0f, 0.0f, 1); // Set background color to black and opaque
 	glClear(GL_COLOR_BUFFER_BIT);         // Clear the color buffer
+	draw();
 	glFlush();
 }
 
 void run() {
-	//draw();
-    //glFlush();  // Render now
-	int y{10},x{LENGTH/2},c{rand()%orange};
-	for(int i=0;i<4;i++){
-		*(board+((y+peices[c][i][1])*LENGTH)+x+peices[c][i][0]) = c+1;
-		drawSquare(x+peices[c][i][0],y+peices[c][i][1],cols[c+1]);
-	}
-	glFlush();
-	int bx,by,br; //best x best y and best rotation (rotation stored as r where toation is r*pi/2)
-	for(int i=0;i<HEIGHT;i++){
-		for (int j=0;j<LENGTH;j++){
-			for (int r=0;r<4;r++){
-				bool fits = true;
-				for(int k =0;k<4;k++){
-					fits &= peices[c][k][0]+j >0 && peices[c][k][1]+i >0 && peices[c][k][0]+j<LENGTH && peices[c][k][1]+i<HEIGHT;
-					if(!fits){break;}
-					fits = board[peices[c][k][0]+j + (peices[c][k][1]+i)*LENGTH]==0;
+	int y{20},x{LENGTH/2},pec{rand()%orange};
+//	int temps[4]={0,0,0,0};
+//	for(int i=0;i<4;i++){
+//		temps[i] = board[(y+peices[pec][i][1])*LENGTH +(x+peices[pec][i][0])]; 
+//		*(board+((y+peices[pec][i][1])*LENGTH)+x+peices[pec][i][0]) = pec+1;
+//		drawSquare(x+peices[pec][i][0],y+peices[pec][i][1],cols[pec+1]);
+//	}
+//	glFlush();
+//	for(int i=0;i<4;i++){
+//		board[(y+peices[pec][i][1])*LENGTH+(x+peices[pec][i][0])] = temps[i];
+//		drawSquare(x+peices[pec][i][0],y+peices[pec][i][1],cols[temps[i]]);
+//	}
+	int bx{5},by{10},br{2},bcul{1}; //best x best y, best rotation (rotation stored as r where toation is r*pi/2)
+	double bc=9000000; //best cost
+	int culs[2] = {held,pec};
+	int c;
+	for(int a=0;a<2;a++){
+		c = culs[a];	
+		for(int i=0;i<HEIGHT;i++){
+			for (int j=0;j<LENGTH;j++){
+				for (int r=0;r<4;r++){
+					bool fits = true;
+					bool floating=true;
+					for(int k =0;k<4;k++){
+						fits &= peices[c][k][0]+j >=0 && peices[c][k][1]+i >=0 && peices[c][k][0]+j<LENGTH && peices[c][k][1]+i<HEIGHT;
+						if(!fits){break;}
+						if((peices[c][k][1]+i-1)<0){floating=false;}else{
+							floating &= board[peices[c][k][0]+j + (peices[c][k][1]+i-1)*LENGTH]==0;
+						}
+						fits = board[peices[c][k][0]+j + (peices[c][k][1]+i)*LENGTH]==0;
+					}
+					if(fits and !floating){
+						//if it fits, it sits
+						for(int k=0;k<4;k++){
+							board[peices[c][k][0]+j + (peices[c][k][1]+i)*LENGTH]=c+1;
+						}
+
+						double col = cost();
+						if (col <= bc){
+							bx = j;
+							by = i;
+							br = r;
+							bc = col;
+							bcul =c;
+						}
+
+						for(int k=0;k<4;k++){
+							board[peices[c][k][0]+j + (peices[c][k][1]+i)*LENGTH]=0;
+						}
+					}
+
+					rotateTet(peices[c]);
 				}
-				rotateTet(peices[c]);
 			}
 		}
 	}
+	c=bcul;
+	for(int i=0;i<br;i++){
+		rotateTet(peices[c]);
+	}
+//	for(int k=0;k<4;k++){
+//		temps[k]=board[peices[c][k][0]+bx + (peices[c][k][1]+20)*LENGTH];
+//		board[peices[c][k][0]+bx + (peices[c][k][1]+20)*LENGTH]=c+1;
+//		drawSquare(bx+peices[c][k][0],20+peices[c][k][1],cols[c+1]);
+//	}
+//	glFlush();
+	for(int k=0;k<4;k++){
+//		board[(20+peices[c][k][1])*LENGTH+(bx+peices[c][k][0])] = temps[k];
+//		drawSquare(bx+peices[c][k][0],20+peices[c][k][1],cols[temps[k]]);
+		board[peices[c][k][0]+bx + (peices[c][k][1]+by)*LENGTH]=c+1;
+    } 
+//	glFlush();
+	int killR=0;
+	i8 t;
+	for(int i=0;i<HEIGHT;i++){
+		bool fullR=true;
+		for(int j=0;j<LENGTH;j++){
+			fullR&=board[i*LENGTH +j]!=0;
+			t = board[i*LENGTH+j];
+			board[i*LENGTH +j]=0;
+			board[(i-killR)*LENGTH +j]=t;
+		}
+		if(fullR){killR++;}
+
+	}
+	draw();
+	glFlush();
 
 }
 
 int main(int argc, char** argv) {
+	cout <<"h"<<endl;
 	cols = new float*[8];
 	cols[blank] = new float[3]{0,0,0};
 	cols[cyan] = new float[3]{0,1,1};
@@ -111,7 +218,7 @@ int main(int argc, char** argv) {
 	cols[blue] = new float[3]{0,0,1};
 	cols[orange] = new float[3]{1,0.5,0};
 	
-	board = new i8[HEIGHT*LENGTH];
+	board = new i8[HEIGHT*LENGTH]{0};
     
 	peices[0] = new int[4][2]{ //line
 		{-1,0},
@@ -155,16 +262,6 @@ int main(int argc, char** argv) {
 		{-1,1},
 		{0,1}
 	};
-	//for(int i=0;i<LENGTH;i++){
-	//	board[i]=(i+1)%8;
-	//	board[i*LENGTH]= (i+1)%8;
-	//}
-	//int x{5},y{5},c{blue};
-	//rotateTet(peices[c-1]);
-	//for(int i=0;i<4;i++){
-	//	*(board+((y+peices[c-1][i][1])*LENGTH)+x+peices[c-1][i][0]) = c;
-//		cout << peices[c-1][i][0] + x << "," << peices[c-1][i][1] + y << endl;
-	//}
 	srand (time(NULL));
 	glutInit(&argc, argv);		// Initialize GLUT
     glutInitWindowSize((LENGTH*20) + 20*BUFFER, (HEIGHT*20)+20*BUFFER);   // Set the window's initial width & height
